@@ -99,51 +99,6 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 
 
 
-    class SendData extends AsyncTask<String, Void , Void>{
-
-        @Override
-        protected Void doInBackground(String... params) {
-
-            data.add(new BasicNameValuePair("nFaces",params[0]));
-            data.add(new BasicNameValuePair("imei",params[1]));
-            data.add(new BasicNameValuePair("date",params[2]));
-            data.add(new BasicNameValuePair("time",params[3]));
-
-            //http post
-            try{
-                HttpClient httpclient = new DefaultHttpClient();
-                HttpPost httppost = new
-                        HttpPost("http://www.facescount.tk/webservices/receive.php");
-                        //HttpPost("http://10.0.2.2:4040/projects/androidProject/webservices/receive.php");
-                        //HttpPost("http://192.168.43.187:4040/projects/androidProject/webservices/receive.php");
-                httppost.setEntity(new UrlEncodedFormEntity(data));
-                HttpResponse response = httpclient.execute(httppost);
-                HttpEntity entity = response.getEntity();
-                InputStream is = entity.getContent();
-                Log.i("postData", response.getStatusLine().toString());
-            }
-            catch(Exception e)
-            {
-                Log.e("log_tag", "Error in http connection "+e.toString());
-            }
-
-            return null;
-        }
-
-        @Override
-        protected void onPreExecute() {
-            super.onPreExecute();
-
-        }
-
-
-        @Override
-        protected void onPostExecute(Void aVoid) {
-            super.onPostExecute(aVoid);
-        }
-    }
-
-
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
 
 
@@ -296,14 +251,6 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             mVibrator.vibrate(pattern,-1);
         }
 
-        if(start+timeout<System.nanoTime()  ){
-            if(facesArray.length!=0) {
-                start = System.nanoTime();
-                c = Calendar.getInstance();
-                Log.e("Number of Faces : ", Integer.toString(facesArray.length) + " ; " + imei);
-                new SendData().execute(Integer.toString(facesArray.length), imei, df.format(c.getTime()), tf.format(c.getTime()));
-            }
-        }
 */
             for (int i = 0; i < facesArray.length; i++) {
                 Core.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
