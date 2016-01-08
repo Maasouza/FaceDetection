@@ -47,17 +47,15 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     public static final int        JAVA_DETECTOR       = 0;
     public static final int        NATIVE_DETECTOR     = 1;
 
-
+    //Vibrate length
     long dot=300;
     long dash=650;
     long sGap=250;
     Vibrator mVibrator;
 
-    //long timeout = 600000000;//nanosec
+    //timeout vibrate
     long timeoutV=5000 ;//ms
-    Calendar c;
-    SimpleDateFormat df=new SimpleDateFormat("yyyy-MM-dd");
-    SimpleDateFormat tf=new SimpleDateFormat("HH:mm:ss");
+   
 
     private MenuItem               mItemFace50;
     private MenuItem               mItemFace40;
@@ -78,8 +76,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     private int                    mDetectorType       =NATIVE_DETECTOR;
     private String[]               mDetectorName;
 
-    String imei;
-    ArrayList<NameValuePair> data = new ArrayList<NameValuePair>(2);
+    
 
 
     private float                  mRelativeFaceSize   = 0.2f;
@@ -91,7 +88,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             Executors.newSingleThreadScheduledExecutor();
 
 
-
+    //Start native code with classifier
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
 
 
@@ -151,7 +148,6 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
         mDetectorName = new String[2];
         mDetectorName[JAVA_DETECTOR] = "Java";
         mDetectorName[NATIVE_DETECTOR] = "Native";
-
     }
 
 
@@ -205,6 +201,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
         mRgba.release();
     }
 
+    //Foreach frame
     public Mat onCameraFrame(CvCameraViewFrame inputFrame){
             mRgba = inputFrame.rgba();
             mGray = inputFrame.gray();
@@ -244,11 +241,11 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             mVibrator.vibrate(pattern,-1);
         }
 
-
+            //draw rect
             for (int i = 0; i < facesArray.length; i++) {
                 Core.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
             }
-
+            //return frame with rect 
             return mRgba;
 
     }
