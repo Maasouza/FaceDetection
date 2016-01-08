@@ -10,14 +10,7 @@ import java.util.Calendar;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.message.BasicNameValuePair;
+
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
@@ -60,8 +53,8 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     long sGap=250;
     Vibrator mVibrator;
 
-    long timeout = 600000000;//nanosec
-    long timeoutV=20000 ;//ms
+    //long timeout = 600000000;//nanosec
+    long timeoutV=5000 ;//ms
     Calendar c;
     SimpleDateFormat df=new SimpleDateFormat("yyyy-MM-dd");
     SimpleDateFormat tf=new SimpleDateFormat("HH:mm:ss");
@@ -157,7 +150,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     public FdActivity() {
         mDetectorName = new String[2];
         mDetectorName[JAVA_DETECTOR] = "Java";
-        mDetectorName[NATIVE_DETECTOR] = "Native (tracking)";
+        mDetectorName[NATIVE_DETECTOR] = "Native";
 
     }
 
@@ -228,7 +221,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 
             if (mDetectorType == JAVA_DETECTOR) {
                 if (mJavaDetector != null)
-                    mJavaDetector.detectMultiScale(mGray, faces, 1.1, 2, 2, // TODO: objdetect.CV_HAAR_SCALE_IMAGE
+                    mJavaDetector.detectMultiScale(mGray, faces, 1.1, 2, 2, 
                             new Size(mAbsoluteFaceSize, mAbsoluteFaceSize), new Size());
             } else if (mDetectorType == NATIVE_DETECTOR) {
                 if (mNativeDetector != null)
@@ -237,7 +230,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
                 Log.e(TAG, "Not selected!");
             }
             Rect[] facesArray = faces.toArray();
-/*
+
 
         if(startV+timeoutV<System.currentTimeMillis()){
             startV=System.currentTimeMillis();
@@ -251,7 +244,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             mVibrator.vibrate(pattern,-1);
         }
 
-*/
+
             for (int i = 0; i < facesArray.length; i++) {
                 Core.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
             }
