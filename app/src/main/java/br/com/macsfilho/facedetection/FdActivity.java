@@ -234,9 +234,16 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             pattern =new long[2+(facesArray.length*2)];
             pattern[0]=0;
             pattern[1]=dash;
-            for(int i=2;i<pattern.length;i+=2){
-                pattern[i]=sGap;
-                pattern[i+1]=dot;
+            if(facesArray.length<=4) {
+                for (int i = 2; i < pattern.length; i += 2) {
+                    pattern[i] = sGap;
+                    pattern[i + 1] = dot;
+                }
+            }else{
+                for (int i = 2; i < 10; i += 2) {
+                    pattern[i] = sGap;
+                    pattern[i + 1] = dot;
+                }
             }
             mVibrator.vibrate(pattern,-1);
         }
