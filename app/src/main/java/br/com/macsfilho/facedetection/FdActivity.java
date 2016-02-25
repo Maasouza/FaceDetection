@@ -4,13 +4,12 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-
-
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
@@ -24,17 +23,22 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
+import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 
 import android.app.Activity;
 import android.content.Context;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Vibrator;
 import android.telephony.TelephonyManager;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.ViewConfiguration;
 import android.view.WindowManager;
 
 
@@ -42,31 +46,44 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 
     //TAG for Log
     private static final String    TAG                 = "FaceDetector";
-
+	//tipo de detector e cor do retangulo de marcação
     private static final Scalar    FACE_RECT_COLOR     = new Scalar(255,0,0,150);
     public static final int        JAVA_DETECTOR       = 0;
     public static final int        NATIVE_DETECTOR     = 1;
 
-    //Vibrate length
+//parametros para a vibração 
     long dot=300;
     long dash=650;
     long sGap=250;
+    long tsGap=150;
     Vibrator mVibrator;
 
-    //timeout vibrate
-    long timeoutV=5000 ;//ms
-   
+    DisplayMetrics displaymetrics = new DisplayMetrics();
+    int height ;
+    int width ;
 
+	//timeouts para vibração e audio
+    long timeout = 600000000;//nanosec
+    long timeoutV=5000 ;//ms
+    long timeoutB=99999999;
+
+	//itens do menu
     private MenuItem               mItemFace50;
     private MenuItem               mItemFace40;
     private MenuItem               mItemFace30;
     private MenuItem               mItemFace20;
     private MenuItem               mItemType;
+    private MenuItem               mItemVibrate;
+    private MenuItem               mItemCameraId;
 
+	//id da camera que será utilizada como principal
+    int cameraid = -1;
     long start;
     long startV;
+    long startB;
     long[] pattern;
-
+    ToneGenerator toneG = new ToneGenerator(AudioManager.STREAM_ALARM, 80);
+	//matrizes de apoio para os pixels da tela
     private Mat                    mRgba;
     private Mat                    mGray;
     private File                   mCascadeFile;
@@ -76,8 +93,11 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     private int                    mDetectorType       =NATIVE_DETECTOR;
     private String[]               mDetectorName;
 
-    
+    String imei;
+    //ArrayList<NameValuePair> data = new ArrayList<NameValuePair>(2);
 
+    //true = vibrate ; false = sound
+    boolean opt=false;
 
     private float                  mRelativeFaceSize   = 0.2f;
     private int                    mAbsoluteFaceSize   = 0;
@@ -85,11 +105,11 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     private CameraBridgeViewBase   mOpenCvCameraView;
 
     private static final ScheduledExecutorService worker =
-            Executors.newSingleThreadScheduledExecutor();
+            Executors.newSingleThreadScheduledExecutor();    
 
-
-    //Start native code with classifier
-    private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
+// verifica se existe no smartphone opencv manager.
+//opencv manager é um gerenciador da biblioteca, ele é usado por aplicativos que usam o opencv para nao precisar carregar os arquivos da mesma junto com o .apk
+private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
 
 
 
@@ -147,25 +167,54 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     public FdActivity() {
         mDetectorName = new String[2];
         mDetectorName[JAVA_DETECTOR] = "Java";
-        mDetectorName[NATIVE_DETECTOR] = "Native";
+        mDetectorName[NATIVE_DETECTOR] = "Native (tracking)";
+
     }
+
 
 
     /** Called when the activity is first created. */
     @Override
     public void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         start = System.nanoTime();
         startV = System.currentTimeMillis();
+        startB = System.currentTimeMillis();
+        getWindowManager().getDefaultDisplay().getMetrics(displaymetrics);
+        height = displaymetrics.heightPixels;
+        width = displaymetrics.widthPixels;
+
+        //%minima
+        setMinFaceSize(0.2f);
+
+        pattern =new long[2];
+        pattern[0]=0;
+        pattern[1]=tsGap;
+
         setContentView(R.layout.face_detect_surface_view);
         if (!OpenCVLoader.initDebug()) {
             // Handle initialization error
         }
+
+        try {
+            ViewConfiguration config = ViewConfiguration.get(this);
+            Field menuKeyField = ViewConfiguration.class.getDeclaredField("sHasPermanentMenuKey");
+            if(menuKeyField != null) {
+                menuKeyField.setAccessible(true);
+                menuKeyField.setBoolean(config, false);
+            }
+        } catch (Exception ex) {
+            // Ignore
+        }
+
         TelephonyManager tm = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
         imei=tm.getDeviceId();
         mVibrator=(Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.fd_activity_surface_view);
+        mOpenCvCameraView.setCameraIndex(cameraid);
+        //mOpenCvCameraView.setRotation(90);
         mOpenCvCameraView.setCvCameraViewListener(this);
     }
 
@@ -201,12 +250,24 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
         mRgba.release();
     }
 
-    //Foreach frame
     public Mat onCameraFrame(CvCameraViewFrame inputFrame){
             mRgba = inputFrame.rgba();
             mGray = inputFrame.gray();
+            //coment to work in landscape
+            //Core.flip(mGray.t(),mGray,-1);
+            //Core.flip(mRgba.t(),mRgba,-1);
+            //Core.flip(mRgba,mRgba,0);
+            //Core.flip(mGray,mGray,0);
+            //ou
+            //Mat mAux = new Mat();
+            //Core.transpose(mGray,mAux);
+            //Core.flip(mAux,mGray,-1);
+            //Core.transpose(mRgba,mAux);
+            //Core.flip(mAux,mRgba,-1);
 
-            if (mAbsoluteFaceSize == 0) {
+
+
+        if (mAbsoluteFaceSize == 0) {
                 int height = mGray.rows();
                 if (Math.round(height * mRelativeFaceSize) > 0) {
                     mAbsoluteFaceSize = Math.round(height * mRelativeFaceSize);
@@ -216,9 +277,9 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 
             MatOfRect faces = new MatOfRect();
 
-            if (mDetectorType == JAVA_DETECTOR) {
+        if (mDetectorType == JAVA_DETECTOR) {
                 if (mJavaDetector != null)
-                    mJavaDetector.detectMultiScale(mGray, faces, 1.1, 2, 2, 
+                    mJavaDetector.detectMultiScale(mGray, faces, 1.1, 2, 2, // TODO: objdetect.CV_HAAR_SCALE_IMAGE
                             new Size(mAbsoluteFaceSize, mAbsoluteFaceSize), new Size());
             } else if (mDetectorType == NATIVE_DETECTOR) {
                 if (mNativeDetector != null)
@@ -228,7 +289,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             }
             Rect[] facesArray = faces.toArray();
 
-
+        /* fazer vibrar
         if(startV+timeoutV<System.currentTimeMillis()){
             startV=System.currentTimeMillis();
             pattern =new long[2+(facesArray.length*2)];
@@ -247,13 +308,40 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             }
             mVibrator.vibrate(pattern,-1);
         }
+        */
 
-            //draw rect
-            for (int i = 0; i < facesArray.length; i++) {
-                Core.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
+            Rect aux;
+            if(facesArray.length>0){
+                for(int i = 0 ; i < facesArray.length-1; i++) {
+                    for(int j = i+1 ; j < facesArray.length;j++){
+                        if(facesArray[j].height>facesArray[i].height){
+                            aux=facesArray[i];
+                            facesArray[i]=facesArray[j];
+                            facesArray[j]=aux;
+                        }
+                    }
+                }
+                timeoutB = (long) (1000 * (((double)height - (double)facesArray[0].height) / (double)height)*(((double)height - (double)facesArray[0].height) / (double)height));
+
+                if(startB+timeoutB<=System.currentTimeMillis()){
+                    if(opt==true) {
+                        mVibrator.vibrate(pattern,-1);
+                    }else{
+                        toneG.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 100);
+                    }
+                    startB = System.currentTimeMillis();
+
+                }
+
             }
-            //return frame with rect 
-            return mRgba;
+
+            //original
+            for (int i = 0; i < facesArray.length; i++) {
+                Core.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 2);
+
+            }
+            //Core.flip(mRgba,mRgba,-1);
+        return mRgba;
 
     }
 
@@ -264,6 +352,8 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
         mItemFace30 = menu.add("30%");
         mItemFace20 = menu.add("20%");
         mItemType   = menu.add(mDetectorName[mDetectorType]);
+        mItemVibrate = menu.add("Vibrate");
+        mItemCameraId = menu.add("Change camera");
         return true;
     }
 
@@ -281,6 +371,18 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             int tmpDetectorType = (mDetectorType + 1) % mDetectorName.length;
             item.setTitle(mDetectorName[tmpDetectorType]);
             setDetectorType(tmpDetectorType);
+        }else if(item == mItemVibrate){
+            if(opt==true){
+                opt=false;
+            }else{
+                opt=true;
+            }
+        }else if(item == mItemCameraId){
+            cameraid=cameraid*-1;
+            mOpenCvCameraView.setCameraIndex(cameraid);
+            mOpenCvCameraView.setCvCameraViewListener(this);
+            onPause();
+            onResume();
         }
         return true;
     }
@@ -302,7 +404,3 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
         }
     }
 }
-
-
-
-
